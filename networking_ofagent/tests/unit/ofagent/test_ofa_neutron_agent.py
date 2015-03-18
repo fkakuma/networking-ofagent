@@ -33,13 +33,12 @@ from neutron.common import constants as n_const
 from neutron.plugins.common import constants as p_const
 from neutron.plugins.ml2.drivers.l2pop import rpc as l2pop_rpc
 
+from networking_ofagent.plugins.ofagent.agent.monitor import PortStatus
 from networking_ofagent.tests.unit.ofagent import ofa_test_base
 
 
 NOTIFIER = ('neutron.plugins.ml2.rpc.AgentNotifierApi')
 FLOODING_ENTRY = l2pop_rpc.PortInfo(*n_const.FLOODING_ENTRY)
-
-PortStatus = collections.namedtuple('PortStatus', 'reason port name')
 
 
 def _mock_port(is_neutron=True, normalized_name=None):
