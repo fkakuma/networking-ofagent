@@ -20,7 +20,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import collections
 import time
 
 from oslo_config import cfg
@@ -53,6 +52,7 @@ from networking_ofagent.i18n import _LE, _LI, _LW
 from networking_ofagent.plugins.ofagent.agent import arp_lib
 from networking_ofagent.plugins.ofagent.agent import constants as ofa_const
 from networking_ofagent.plugins.ofagent.agent import flows
+from networking_ofagent.plugins.ofagent.agent import monitor
 from networking_ofagent.plugins.ofagent.agent import ports
 from networking_ofagent.plugins.ofagent.agent import tables
 
@@ -60,8 +60,6 @@ from networking_ofagent.plugins.ofagent.agent import tables
 LOG = logging.getLogger(__name__)
 cfg.CONF.import_group('AGENT',
                       'networking_ofagent.plugins.ofagent.common.config')
-
-PortStatus = collections.namedtuple('PortStatus', 'reason port name')
 
 
 class DeviceDetailsGetError(exceptions.NeutronException):
@@ -146,7 +144,7 @@ class OFANeutronAgentRyuApp(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(OFANeutronAgentRyuApp, self).__init__(*args, **kwargs)
         self.arplib = arp_lib.ArpLib(self)
-        self.port_status_list = []
+        self.monitor = monitor.PortMonitor()
 
     def start(self):
         super(OFANeutronAgentRyuApp, self).start()
@@ -181,36 +179,10 @@ class OFANeutronAgentRyuApp(app_manager.RyuApp):
 
     @handler.set_ev_cls(ofp_event.EventOFPPortStatus, handler.MAIN_DISPATCHER)
     def _port_status_handler(self, ev):
-        msg = ev.msg
-        LOG.debug("port status msg %s", msg)
-        datapath = msg.datapath
-        ofp = datapath.ofproto
-        port_no = msg.desc.port_no
-        if msg.reason == ofp.OFPPR_ADD:
-            reason = 'add'
-        elif msg.reason == ofp.OFPPR_DELETE:
-            reason = 'del'
-        elif msg.reason == ofp.OFPPR_MODIFY:
-            return
-        else:
-            LOG.info(_LI("Received illeagal reason msg: %s"), msg)
-            return
-        port = ports.Port.from_ofp_port(msg.desc)
-        if port.is_neutron_port():
-            self.port_status_list.append(
-                PortStatus(reason=reason, port=port,
-                           name=port.normalized_port_name()))
-            LOG.debug("port status reason: %(reason)s status name: %(name)s "
-                      "port no: %(portno)s port: %(port)s",
-                      {'reason': self.port_status_list[-1].reason,
-                       'name': self.port_status_list[-1].name,
-                       'portno': port_no,
-                       'port': self.port_status_list[-1].port})
+        self.monitor.port_status_handler(ev)
 
     def get_port_status_list(self):
-        port_status_list = list(self.port_status_list)
-        self.port_status_list = []
-        return port_status_list
+        return self.monitor.get_port_status_list()
 
 
 class OFANeutronAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin,
